@@ -10,6 +10,7 @@
 #include <iostream>
 #include <type_traits>
 
+#include "numa_alloc.h"
 #include "pvector.h"
 #include "util.h"
 
@@ -118,14 +119,14 @@ class CSRGraph {
 
   void ReleaseResources() {
     if (out_index_ != nullptr)
-      delete[] out_index_;
+      GraphFree(out_index_, (size_t)(num_nodes_ + 1));
     if (out_neighbors_ != nullptr)
-      delete[] out_neighbors_;
+      GraphFree(out_neighbors_, (size_t)num_edges_directed());
     if (directed_) {
       if (in_index_ != nullptr)
-        delete[] in_index_;
+        GraphFree(in_index_, (size_t)(num_nodes_ + 1));
       if (in_neighbors_ != nullptr)
-        delete[] in_neighbors_;
+        GraphFree(in_neighbors_, (size_t)num_edges_directed());
     }
   }
 
@@ -239,9 +240,21 @@ class CSRGraph {
     }
   }
 
+  // Remove NUMA binding from all graph arrays so the tiered-memory system
+  // (DAMON, TPP, Nomad, Ripple) can freely migrate pages from remote to local.
+  // Called once at workload start via BenchmarkKernel, after graph construction.
+  void UnpinArrays() const {
+    GraphUnpin(out_index_,     (size_t)(num_nodes_ + 1));
+    GraphUnpin(out_neighbors_, (size_t)num_edges_directed());
+    if (directed_) {
+      GraphUnpin(in_index_,     (size_t)(num_nodes_ + 1));
+      GraphUnpin(in_neighbors_, (size_t)num_edges_directed());
+    }
+  }
+
   static DestID_** GenIndex(const pvector<SGOffset> &offsets, DestID_* neighs) {
     NodeID_ length = offsets.size();
-    DestID_** index = new DestID_*[length];
+    DestID_** index = GraphAlloc<DestID_*>((size_t)length);
     #pragma omp parallel for
     for (NodeID_ n=0; n < length; n++)
       index[n] = neighs + offsets[n];

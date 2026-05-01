@@ -3,6 +3,11 @@
 CXX_FLAGS += -std=c++11 -O3 -Wall
 PAR_FLAG = -fopenmp
 
+ifeq ($(NUMA), 1)
+	CXX_FLAGS += -DGAPBS_NUMA
+	LINK_FLAGS += -lnuma
+endif
+
 ifneq (,$(findstring icpc,$(CXX)))
 	PAR_FLAG = -openmp
 endif
@@ -23,7 +28,7 @@ SUITE = $(KERNELS) converter
 all: $(SUITE)
 
 % : src/%.cc src/*.h
-	$(CXX) $(CXX_FLAGS) $< -o $@
+	$(CXX) $(CXX_FLAGS) $< -o $@ $(LINK_FLAGS)
 
 # Testing
 include test/test.mk

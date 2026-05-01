@@ -6,10 +6,11 @@
 # Generate Input Graphs ------------------------------------------------#
 #-----------------------------------------------------------------------#
 
-GRAPH_DIR = benchmark/graphs
-RAW_GRAPH_DIR = benchmark/graphs/raw
+GRAPH_DIR = /data/gapbs/graphs
+RAW_GRAPH_DIR = /data/gapbs/graphs/raw
 
-GRAPHS = twitter web road kron urand
+# GRAPHS = twitter web road kron urand
+GRAPHS = twitter web kron
 ALL_GRAPHS =\
 	$(addsuffix .sg, $(GRAPHS)) \
 	$(addsuffix .wsg, $(GRAPHS)) \

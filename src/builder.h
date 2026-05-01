@@ -14,6 +14,7 @@
 #include "command_line.h"
 #include "generator.h"
 #include "graph.h"
+#include "numa_alloc.h"
 #include "platform_atomics.h"
 #include "pvector.h"
 #include "reader.h"
@@ -157,7 +158,7 @@ class BuilderBase {
       diffs[n] = new_end - n_start;
     }
     pvector<SGOffset> sq_offsets = ParallelPrefixSum(diffs);
-    *sq_neighs = new DestID_[sq_offsets[g.num_nodes()]];
+    *sq_neighs = GraphAlloc<DestID_>((size_t)sq_offsets[g.num_nodes()]);
     *sq_index = CSRGraph<NodeID_, DestID_>::GenIndex(sq_offsets, *sq_neighs);
     #pragma omp parallel for private(n_start)
     for (NodeID_ n=0; n < g.num_nodes(); n++) {
@@ -221,7 +222,7 @@ class BuilderBase {
       *index = CSRGraph<NodeID_, DestID_>::GenIndex(offsets, *neighs);
       if (invert) {       // create inv_neighs & inv_index for incoming edges
         pvector<SGOffset> inoffsets = ParallelPrefixSum(indegrees);
-        *inv_neighs = new DestID_[inoffsets[num_nodes_]];
+        *inv_neighs = GraphAlloc<DestID_>((size_t)inoffsets[num_nodes_]);
         *inv_index = CSRGraph<NodeID_, DestID_>::GenIndex(inoffsets,
                                                           *inv_neighs);
         for (NodeID_ u = 0; u < num_nodes_; u++) {
@@ -301,7 +302,7 @@ class BuilderBase {
                DestID_** neighs) {
     pvector<NodeID_> degrees = CountDegrees(el, transpose);
     pvector<SGOffset> offsets = ParallelPrefixSum(degrees);
-    *neighs = new DestID_[offsets[num_nodes_]];
+    *neighs = GraphAlloc<DestID_>((size_t)offsets[num_nodes_]);
     *index = CSRGraph<NodeID_, DestID_>::GenIndex(offsets, *neighs);
     #pragma omp parallel for
     for (auto it = el.begin(); it < el.end(); it++) {
@@ -324,6 +325,11 @@ class BuilderBase {
     if (needs_weights_)
       Generator<NodeID_, DestID_, WeightT_>::InsertWeights(el);
     if (in_place_) {
+      if (GraphNumaNode() >= 0) {
+        std::cout << "In-place mode (-m) is incompatible with GAPBS_REMOTE_NODE: "
+                     "edge-list memory cannot be NUMA-relocated." << std::endl;
+        std::exit(-31);
+      }
       MakeCSRInPlace(el, &index, &neighs, &inv_index, &inv_neighs);
     } else {
       MakeCSR(el, false, &index, &neighs);
@@ -388,7 +394,7 @@ class BuilderBase {
       new_ids[degree_id_pairs[n].second] = n;
     }
     pvector<SGOffset> offsets = ParallelPrefixSum(degrees);
-    DestID_* neighs = new DestID_[offsets[g.num_nodes()]];
+    DestID_* neighs = GraphAlloc<DestID_>((size_t)offsets[g.num_nodes()]);
     DestID_** index = CSRGraph<NodeID_, DestID_>::GenIndex(offsets, neighs);
     #pragma omp parallel for
     for (NodeID_ u=0; u < g.num_nodes(); u++) {
