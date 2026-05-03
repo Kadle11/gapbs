@@ -250,6 +250,8 @@ class CSRGraph {
       GraphUnpin(in_index_,     (size_t)(num_nodes_ + 1));
       GraphUnpin(in_neighbors_, (size_t)num_edges_directed());
     }
+    GraphResetPolicy();
+    GraphDropCaches();
   }
 
   static DestID_** GenIndex(const pvector<SGOffset> &offsets, DestID_* neighs) {

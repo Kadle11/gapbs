@@ -9,6 +9,7 @@ sssp
 tc
 
 test/out/*.out
+results/*
 
 benchmark/out/*.out
 benchmark/graphs/*.sg

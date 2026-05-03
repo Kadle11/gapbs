@@ -57,7 +57,7 @@ if [ "$#" -lt 2 ]; then
   echo "  type              Tier management policy"
   echo "  threads           Worker thread count (and CPU count for pinning)"
   echo "  kernel            GAPBS kernel: pr|bfs|sssp|bc|tc|cc (default: pr)"
-  echo "  graph             File path (/path/to/graph.sg) or Kronecker scale gNN (default: g22)"
+  echo "  graph             File path (/path/to/graph.sg)"
   echo "  trials            Number of kernel iterations (default: 16)"
   echo "  prefix_dir        Optional result directory prefix"
   echo "  damon_bw_mb_s     DAMON migrate bandwidth budget in MB/s (default: 16384)"
@@ -84,13 +84,7 @@ case "$GAPBS_KERNEL" in
   *) echo "Invalid kernel '$GAPBS_KERNEL' (expected pr|bfs|sssp|bc|tc|cc)"; exit 1 ;;
 esac
 
-# Resolve graph spec: gNN → synthetic Kronecker; otherwise treat as file path.
-if [[ "$GAPBS_GRAPH" =~ ^g([0-9]+)$ ]]; then
-  GAPBS_SCALE="${BASH_REMATCH[1]}"
-  GRAPH_ARGS="-g $GAPBS_SCALE"
-  # Rough memory estimate for output-dir naming: 2^(scale-7) MB.
-  SIZE_MB=$(( 1 << (GAPBS_SCALE > 7 ? GAPBS_SCALE - 7 : 0) ))
-elif [[ -f "$GAPBS_GRAPH" ]]; then
+if [[ -f "$GAPBS_GRAPH" ]]; then
   GRAPH_ARGS="-f $GAPBS_GRAPH"
   # Derive SIZE_MB from file size.
   SIZE_MB=$(( $(stat -c%s "$GAPBS_GRAPH") / 1048576 ))
@@ -99,7 +93,7 @@ else
   exit 1
 fi
 
-KERNEL_BIN="$GAPBSDIR/benchmark/$GAPBS_KERNEL"
+KERNEL_BIN="$GAPBSDIR/$GAPBS_KERNEL"
 TIME_SUFFIX=$(date +"%Y%m%d-%H%M%S")
 DAMO_STEER_SCRIPT="$RIPPLE_ROOT/tier-sys/damon/damo-steer.sh"
 
@@ -230,12 +224,9 @@ run() {
 
   echo "Running GAPBS $GAPBS_KERNEL ..."
 
-  # Graph is allocated via --membind=$RSOC: all arrays (CSR offsets, adjacency
-  # lists, algorithm scratch) start on the remote NUMA node.  damo-steer will
-  # promote hot pages after the warmup window.
   set -x
-  OMP_NUM_THREADS="$pthreads" \
-  numactl -C "$MB_CORES" --membind="$RSOC" \
+  numactl -C "$MB_CORES" \
+    env OMP_NUM_THREADS="$pthreads" GAPBS_REMOTE_NODE="$RSOC" \
     "$KERNEL_BIN" \
       $GRAPH_ARGS \
       -n "$GAPBS_TRIALS" \
